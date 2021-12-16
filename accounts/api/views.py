@@ -192,21 +192,3 @@ class ChangePasswordView(UpdateAPIView):
 			return Response({"response":"successfully changed password"}, status=status.HTTP_200_OK)
 
 		return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class LogoutUserView(ListAPIView):
-
-	"""
-	View to logout a user.
-	* You have to have logged in to be able logout
-	"""
-
-	authentication_classes = (TokenAuthentication,)
-	permission_classes = (IsAuthenticated,)
-
-	def post(self, request, *args, **kwargs):
-		logout(request)
-		request.user.auth_token.delete()
-
-		data = {'success': 'Sucessfully logged out',}
-		return Response(data=data, status=status.HTTP_200_OK)

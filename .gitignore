@@ -137,6 +137,12 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+
+### VisualStudioCode ###
+.vscode
+
+
+
 # PyCharm
 #  JetBrains specific template is maintainted in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/master/Global/JetBrains.gitignore
@@ -157,9 +163,4 @@ Blog
 About
 
 
-### VisualStudioCode ###
-.vscode
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+

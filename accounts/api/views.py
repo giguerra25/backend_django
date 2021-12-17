@@ -34,13 +34,13 @@ def registration_view(request):
 		if validate_email(email) != None:
 			data['error_message'] = 'That email is already in use.'
 			data['response'] = 'Error'
-			return Response(data)
+			return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
 		username = request.data.get('username', '0')
 		if validate_username(username) != None:
 			data['error_message'] = 'That username is already in use.'
 			data['response'] = 'Error'
-			return Response(data)
+			return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
 		serializer = RegistrationSerializer(data=request.data)
 		
@@ -54,7 +54,7 @@ def registration_view(request):
 			data['token'] = token
 		else:
 			data = serializer.errors
-		return Response(data)
+		return Response(data, status=status.HTTP_201_CREATED)
 
 def validate_email(email):
 	account = None
@@ -90,7 +90,7 @@ def account_properties_view(request):
     
     if request.method == 'GET':
         serializer = AccountPropertiesSerializer(account)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
     
 @api_view(['PUT', ])
@@ -108,7 +108,7 @@ def update_account_view(request):
         if serializer.is_valid():
             serializer.save()
             data['response'] = "Account update success"
-            return Response(data=data)
+            return Response(data=data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -135,11 +135,13 @@ class ObtainAuthTokenView(APIView):
 			context['pk'] = account.pk
 			context['email'] = email.lower()
 			context['token'] = token.key
+
+			return Response(context, status=status.HTTP_200_OK)
 		else:
 			context['response'] = 'Error'
 			context['error_message'] = 'Invalid credentials'
 
-		return Response(context)
+			return Response(context, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET', ])

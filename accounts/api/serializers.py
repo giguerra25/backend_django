@@ -4,9 +4,12 @@ from accounts.models import Account
 
 class RegistrationSerializer(serializers.ModelSerializer):
 #this field is like confirm password
+
 	password2 		= serializers.CharField(style={'input_type': 'password'}, write_only=True)
     
 	class Meta:
+
+
 		model = Account
 		fields = ['email', 'username', 'password', 'password2']
 		extra_kwargs = {
@@ -14,6 +17,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
 		}
 
 	def save(self):
+
 		account = Account(
 					email=self.validated_data['email'],
 					username=self.validated_data['username']

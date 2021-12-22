@@ -1,28 +1,52 @@
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import (
+								api_view, 
+								permission_classes, 
+								authentication_classes,)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.views import APIView
 from rest_framework.generics import (
 									UpdateAPIView,
-									ListAPIView,
-)
+									ListAPIView,)
 from django.contrib.auth import authenticate, logout
-
 from accounts.api.serializers import (
                                     AccountPropertiesSerializer, 
                                         RegistrationSerializer,
-                                        ChangePasswordSerializer,
-)
+                                        ChangePasswordSerializer,)
 from accounts.models import Account
 from rest_framework.authtoken.models import Token
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
+
+
+description_messages={
+'register':"""This endpoint creates a new user. The client application should ensure the password is double checked to ensure
+user does not enter mismatching password and also ensure the email address field is checked using regular
+expressions to ensure it's an email address.""",
+'account_propierties': "This endpoint requires log-in access. It's used to get data account of an user",
+'update_account':"This endpoint updates a user's account",
+}
 
 
 # Register
 # Response: https://gist.github.com/mitchtabian/c13c41fa0f51b304d7638b7bac7cb694
 # Url: https://<your-domain>/api/accounts/register
+@swagger_auto_schema(
+	method='post', 
+	operation_description=description_messages['register'],
+	request_body=RegistrationSerializer,
+	responses={'200': 'That email/username is already in use.',
+				'201': openapi.Response('Successfully registered new user.',
+				examples={"application/json": {
+										"response": "successfully registered new user.",
+										"email": "user12@lab.com",
+										"username": "user12",
+										"pk": 16,
+										"token": "7418d9a1197600e2cc326b1ee39cf9a556eed2eb"}},),
+				'400': 'Bad or missing parameters or content-type not specified as application/json',})
 @api_view(['POST', ])
 @permission_classes([])
 @authentication_classes([])
@@ -34,13 +58,13 @@ def registration_view(request):
 		if validate_email(email) != None:
 			data['error_message'] = 'That email is already in use.'
 			data['response'] = 'Error'
-			return Response(data, status=status.HTTP_400_BAD_REQUEST)
+			return Response(data, status=status.HTTP_200_OK)
 
 		username = request.data.get('username', '0')
 		if validate_username(username) != None:
 			data['error_message'] = 'That username is already in use.'
 			data['response'] = 'Error'
-			return Response(data, status=status.HTTP_400_BAD_REQUEST)
+			return Response(data, status=status.HTTP_200_OK)
 
 		serializer = RegistrationSerializer(data=request.data)
 		
@@ -52,9 +76,10 @@ def registration_view(request):
 			data['pk'] = account.pk
 			token = Token.objects.get(user=account).key
 			data['token'] = token
+			return Response(data, status=status.HTTP_201_CREATED)
 		else:
 			data = serializer.errors
-		return Response(data, status=status.HTTP_201_CREATED)
+			return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
 def validate_email(email):
 	account = None
@@ -79,6 +104,11 @@ def validate_username(username):
 # Response: https://gist.github.com/mitchtabian/4adaaaabc767df73c5001a44b4828ca5
 # Url: http://127.0.0.1:8000/api/accounts/
 # Headers: Authorization: Token <token>
+@swagger_auto_schema(
+	method='get',
+	operation_description=description_messages['account_propierties'],
+	responses={'200': 'Not message implemented',
+				'404': 'Not message implemented',})
 @api_view(['GET', ])
 @permission_classes((IsAuthenticated, ))
 def account_properties_view(request):
@@ -92,7 +122,13 @@ def account_properties_view(request):
         serializer = AccountPropertiesSerializer(account)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    
+@swagger_auto_schema(
+	method='put',
+	operation_description=description_messages['update_account'],
+	request_body=AccountPropertiesSerializer,
+	responses={'200': 'Account update success',
+				'400': 'Not message implemented',
+				'404': 'Not message implemented',})   
 @api_view(['PUT', ])
 @permission_classes((IsAuthenticated, ))
 def update_account_view(request):
@@ -144,12 +180,11 @@ class ObtainAuthTokenView(APIView):
 			return Response(context, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
-
-
-
 class ChangePasswordView(UpdateAPIView):
+
+	"""
+	Classe ChangePasswordView
+	"""
 
 	serializer_class = ChangePasswordSerializer
 	model = Account
@@ -161,6 +196,8 @@ class ChangePasswordView(UpdateAPIView):
 		return obj
 
 	def update(self, request, *args, **kwargs):
+
+		"""Method put"""
 		self.object = self.get_object()
 		serializer = self.get_serializer(data=request.data)
 

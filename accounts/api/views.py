@@ -11,15 +11,17 @@ from rest_framework.generics import (
 									UpdateAPIView,
 									ListAPIView,)
 from django.contrib.auth import authenticate, logout
+from django.utils.decorators import method_decorator
 from accounts.api.serializers import (
                                     AccountPropertiesSerializer, 
                                         RegistrationSerializer,
-                                        ChangePasswordSerializer,)
+                                        ChangePasswordSerializer,
+										LoginSerializer,)
 from accounts.models import Account
 from rest_framework.authtoken.models import Token
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-
+from dj_rest_auth.views import LogoutView
 
 
 description_messages={
@@ -27,7 +29,10 @@ description_messages={
 user does not enter mismatching password and also ensure the email address field is checked using regular
 expressions to ensure it's an email address.""",
 'account_propierties': "This endpoint requires log-in access. It's used to get data account of an user",
+'login':"This endpoint logs in a user",
+'logout':"This endpoint logs out a user who's logged in",
 'update_account':"This endpoint updates a user's account",
+'change_password':"This endpoint resets a user's password",
 }
 
 
@@ -107,8 +112,15 @@ def validate_username(username):
 @swagger_auto_schema(
 	method='get',
 	operation_description=description_messages['account_propierties'],
-	responses={'200': 'Not message implemented',
-				'404': 'Not message implemented',})
+	responses={'200': AccountPropertiesSerializer,
+				'404': openapi.Response(
+							description='Token not found in database',
+							examples={"application/json": 
+										{
+											"detail": "Invalid token."
+										}
+									}
+										),})
 @api_view(['GET', ])
 @permission_classes((IsAuthenticated, ))
 def account_properties_view(request):
@@ -121,14 +133,26 @@ def account_properties_view(request):
     if request.method == 'GET':
         serializer = AccountPropertiesSerializer(account)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
+
+
+
+# Account update properties
+# Url: https://<your-domain>/api/account/properties/update
+# Headers: Authorization: Token <token>
 @swagger_auto_schema(
 	method='put',
 	operation_description=description_messages['update_account'],
 	request_body=AccountPropertiesSerializer,
-	responses={'200': 'Account update success',
-				'400': 'Not message implemented',
-				'404': 'Not message implemented',})   
+	responses={'200': openapi.Response(
+							description='Update success',
+							examples={"application/json": 
+										{
+											"response": "Account update success"
+										}
+									}
+										),
+				'400': 'bad or missing parameters or content-type not specified as application/json',
+				'404': 'Token not found in database',})   
 @api_view(['PUT', ])
 @permission_classes((IsAuthenticated, ))
 def update_account_view(request):
@@ -149,13 +173,37 @@ def update_account_view(request):
 
 
 # LOGIN
-# Response: https://gist.github.com/mitchtabian/8e1bde81b3be342853ddfcc45ec0df8a
 # URL: http://127.0.0.1:8000/api/accounts/login
 class ObtainAuthTokenView(APIView):
 
 	authentication_classes = []
 	permission_classes = []
 
+	@swagger_auto_schema(
+		operation_description=description_messages['login'],
+		request_body= LoginSerializer,
+		responses={'200': openapi.Response(
+							description='login was successful',
+							examples={"application/json": 
+										{
+											"response": "Successfully authenticated.",
+											"pk": 14,
+											"email": "user10@lab.com",
+											"token": "01505e913152ddfac3b170b48a44db0d5883b4f9"
+										}
+									}
+										),
+					'400': openapi.Response(
+							description='bad or missing parameters or content-type not specified as application/json',
+							examples={"application/json": 
+										{
+											"response": "Error",
+											"error_message": "Invalid credentials"
+										}
+									}
+										),
+		}
+	)
 	def post(self, request):
 		context = {}
 
@@ -180,10 +228,40 @@ class ObtainAuthTokenView(APIView):
 			return Response(context, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+
+# CHANGE_PASSWORD
+# URL: http://127.0.0.1:8000/api/accounts/change_password/
+
+@method_decorator(name='patch', decorator=swagger_auto_schema(auto_schema=None))
+@method_decorator(name='put', 
+				decorator=swagger_auto_schema(
+							operation_description=description_messages['change_password'],
+							request_body= ChangePasswordSerializer,
+							responses={'200': openapi.Response(
+												description='password was changed successfully',
+												examples={"application/json": 
+															{
+																"response": "successfully changed password",
+															}
+														}
+															),
+										'400': openapi.Response(
+												description='bad or missing parameters or content-type not specified as application/json',
+												examples={"application/json": 
+															{
+																"error":{"old_password": "Wrong password.",
+																"new_password": "New passwords must match"}
+															}
+														}
+															),
+										}
+											)
+				)
 class ChangePasswordView(UpdateAPIView):
 
 	"""
-	Classe ChangePasswordView
+	
 	"""
 
 	serializer_class = ChangePasswordSerializer
@@ -196,21 +274,22 @@ class ChangePasswordView(UpdateAPIView):
 		return obj
 
 	def update(self, request, *args, **kwargs):
-
-		"""Method put"""
+		"""
+		
+		"""
 		self.object = self.get_object()
 		serializer = self.get_serializer(data=request.data)
 
 		if serializer.is_valid():
 			# Check old password
 			if not self.object.check_password(serializer.data.get("old_password")):
-				return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
+				return Response({"old_password": "Wrong password."}, status=status.HTTP_400_BAD_REQUEST)
 
 			# confirm the new passwords match
 			new_password = serializer.data.get("new_password")
 			confirm_new_password = serializer.data.get("confirm_new_password")
 			if new_password != confirm_new_password:
-				return Response({"new_password": ["New passwords must match"]}, status=status.HTTP_400_BAD_REQUEST)
+				return Response({"new_password": "New passwords must match"}, status=status.HTTP_400_BAD_REQUEST)
 
 			# set_password also hashes the password that the user will get
 			self.object.set_password(serializer.data.get("new_password"))
@@ -218,3 +297,29 @@ class ChangePasswordView(UpdateAPIView):
 			return Response({"response":"successfully changed password"}, status=status.HTTP_200_OK)
 
 		return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+@method_decorator(name='get', decorator=swagger_auto_schema(auto_schema=None))
+@method_decorator(name='post', 
+				decorator=swagger_auto_schema(
+							operation_description=description_messages['logout'],
+							responses={'200': openapi.Response(
+												description='logout was successful',
+												examples={"application/json": 
+															{
+																"detail": "Successfully logged out."
+															}
+														}
+															),
+										}
+											)
+					)
+class LogoutView(LogoutView):
+	
+	authentication_classes = (TokenAuthentication,)
+	permission_classes = (IsAuthenticated,)
+
+
+

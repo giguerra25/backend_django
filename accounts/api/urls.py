@@ -6,9 +6,7 @@ from accounts.api.views import (
 				registration_view,
 				ObtainAuthTokenView,
 				ChangePasswordView,
-)
-from dj_rest_auth.views import (
-    			LogoutView
+				LogoutView,
 )
 
 
@@ -22,6 +20,5 @@ urlpatterns = [
 	path('properties/update', update_account_view, name="update"),
 	path('register', registration_view, name="register"),
 	path('logout/', LogoutView.as_view(), name="logout"),
-	#path('nomy', include('dj_rest_auth.urls')),
 
 ]

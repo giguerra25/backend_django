@@ -50,4 +50,4 @@ class LoginSerializer(serializers.ModelSerializer):
 
 	class Meta:
 		model = Account
-		fields = ['username', 'password', ]
+		fields = ['email', 'password', ]

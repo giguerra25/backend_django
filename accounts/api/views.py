@@ -10,15 +10,19 @@ from rest_framework.views import APIView
 from rest_framework.generics import (
 									UpdateAPIView,
 									ListAPIView,)
+from django.contrib.sessions.models import Session
+from datetime import datetime
 from django.contrib.auth import authenticate, logout
 from django.utils.decorators import method_decorator
 from accounts.api.serializers import (
                                     AccountPropertiesSerializer, 
                                         RegistrationSerializer,
                                         ChangePasswordSerializer,
-										LoginSerializer,)
+										LoginSerializer,
+										UserTokenSerializer,)
 from accounts.models import Account
 from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from dj_rest_auth.views import LogoutView
@@ -171,7 +175,7 @@ def update_account_view(request):
             return Response(data=data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+'''
 # LOGIN
 # URL: http://127.0.0.1:8000/api/accounts/login
 class ObtainAuthTokenView(APIView):
@@ -226,6 +230,177 @@ class ObtainAuthTokenView(APIView):
 			context['error_message'] = 'Invalid credentials'
 
 			return Response(context, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(name='get', decorator=swagger_auto_schema(auto_schema=None))
+@method_decorator(name='post', 
+				decorator=swagger_auto_schema(
+							operation_description=description_messages['logout'],
+							responses={'200': openapi.Response(
+												description='logout was successful',
+												examples={"application/json": 
+															{
+																"detail": "Successfully logged out."
+															}
+														}
+															),
+										}
+											)
+					)
+class LogoutView(LogoutView):
+	
+	authentication_classes = (TokenAuthentication,)
+	permission_classes = (IsAuthenticated,)
+'''
+
+
+# LOGIN
+# URL: http://127.0.0.1:8000/api/accounts/login
+class LoginView(ObtainAuthToken):
+	
+	serializer_class = LoginSerializer
+
+	@swagger_auto_schema(
+		operation_description=description_messages['login'],
+		#request_body= LoginSerializer,
+		responses={'201': openapi.Response(
+							description='login was successful',
+							examples={"application/json": 
+										{
+											"token": "c89e8ab9abadfde6df61169fdc3ccc777a1dbf49",
+											"user": {
+												"email": "user9@lab.org",
+												"username": "user9"
+											},
+											"message": "Successfully authenticated."
+										}
+									}
+										),
+					'400': openapi.Response(
+							description='bad or missing field "email" / "password"',
+							examples={"application/json": 
+										{
+											'error':'Unable to log in with provided credentials. or Must include "email" and "password".',
+										}
+									}
+										),
+					'401': openapi.Response(
+							description='User is not activated',
+							examples={"application/json": 
+										{
+											'error': 'This user cannot start session'
+										}
+									}
+										),
+		}
+	)
+	def post(self, request, *args, **kwargs):
+
+		login_serializer = self.serializer_class(data=request.data, context={'request':request})
+		#print(login_serializer.is_valid())
+
+		if login_serializer.is_valid():
+			user = login_serializer.validated_data['user']
+			
+			if user.is_active:
+				token, created = Token.objects.get_or_create(user=user)
+				user_serializer = UserTokenSerializer(user)
+				if created:
+					return Response({
+						'token' : token.key,
+						'user' : user_serializer.data,
+						'message': 'Successfully authenticated.'
+					}, status=status.HTTP_201_CREATED)
+				else:
+					#delete the actual token for security reasons
+					token.delete()	
+					token = Token.objects.create(user=user)
+					return Response({
+						'token' : token.key,
+						'user' : user_serializer.data,
+						'message': 'Successfully authenticated.'
+					}, status=status.HTTP_201_CREATED)	
+			else:
+				return Response({'error': 'This user cannot start session'}, 
+									status=status.HTTP_401_UNAUTHORIZED)
+		else:
+			return Response(login_serializer.errors, 
+									status=status.HTTP_400_BAD_REQUEST)
+		
+# LOGOUT
+# URL: http://127.0.0.1:8000/api/accounts/logout
+
+@method_decorator(name='post', 
+				decorator=swagger_auto_schema(
+							operation_description=description_messages['logout'],
+							request_body= openapi.Schema(
+											type=openapi.TYPE_OBJECT,
+											title="Logout request",
+											required=["token"], 
+											properties={
+													'token': openapi.Schema(type=openapi.TYPE_STRING, 
+																			#description='string', 
+																			title="token",
+																			),
+														}
+														),
+							responses={'200': openapi.Response(
+												description='logout was successful',
+												examples={"application/json": 
+															{
+																'session_message': 'user sessions deleted',
+																'token_message': 'Token deleted',
+															}
+														}
+															),
+										'400': openapi.Response(
+												description='Invalid token in request',
+												examples={"application/json": 
+															{
+																'error': 'User not founded with given credentials'
+															}
+														}
+															),
+										'409': openapi.Response(
+												description='Missing token in request',
+												examples={"application/json": 
+															{
+																'error': 'Token not founded in the request'
+															}
+														}
+															),
+										}
+											)
+					)
+class LogoutView(APIView):
+	
+	def post(self, request, *args, **kwargs):
+		
+		try:
+			token = request.POST.get('token')
+			token = Token.objects.filter(key = token).first()
+
+			if token:
+				user = token.user
+				#destroy token and session
+				all_sessions = Session.objects.filter(expire_date__gte = datetime.now())
+				if all_sessions.exists():
+					for session in all_sessions:
+						session_data = session.get_decoded()
+						if user.id == int(session_data.get('_auth_user_id')):
+							session.delete()
+				token.delete()
+				session_message = 'user sessions deleted'
+				token_message = 'Token deleted'
+				return Response({'token_message': token_message, 'session_message': session_message},
+								status=status.HTTP_200_OK)
+				
+			return Response({'error': 'User not founded with given credentials'}, 
+									status=status.HTTP_400_BAD_REQUEST)
+		
+		except:
+			return Response({'error': 'Token not founded in the request'}, 
+								status=status.HTTP_409_CONFLICT)
 
 
 
@@ -299,27 +474,4 @@ class ChangePasswordView(UpdateAPIView):
 		return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
-@method_decorator(name='get', decorator=swagger_auto_schema(auto_schema=None))
-@method_decorator(name='post', 
-				decorator=swagger_auto_schema(
-							operation_description=description_messages['logout'],
-							responses={'200': openapi.Response(
-												description='logout was successful',
-												examples={"application/json": 
-															{
-																"detail": "Successfully logged out."
-															}
-														}
-															),
-										}
-											)
-					)
-class LogoutView(LogoutView):
-	
-	authentication_classes = (TokenAuthentication,)
-	permission_classes = (IsAuthenticated,)
-
-
-
+		

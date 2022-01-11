@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from accounts.models import Account
+from django.contrib.auth import authenticate
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -46,8 +47,36 @@ class ChangePasswordSerializer(serializers.Serializer):
 	new_password 				= serializers.CharField(required=True)
 	confirm_new_password 		= serializers.CharField(required=True)
 
-class LoginSerializer(serializers.ModelSerializer):
+class LoginSerializer(serializers.Serializer):
+
+	email 		= serializers.CharField(label=("email"),required=True)
+	password 	= serializers.CharField(label=("password"),style={'input_type': 'password'},trim_whitespace=False,required=True)
+
+	def validate(self, attrs):
+
+		email = attrs.get('email')
+		password = attrs.get('password')
+
+		if email and password:
+			user = authenticate(request=self.context.get('request'),
+								email=email, password=password)
+
+			if not user:
+				#msg = _('Unable to log in with provided credentials.')
+				#raise serializers.ValidationError(msg, code='authorization')
+				raise serializers.ValidationError({'error':'Unable to log in with provided credentials.'})
+		else:
+			#msg = _('Must include "email" and "password".')
+			#raise serializers.ValidationError(msg, code='authorization')
+			raise serializers.ValidationError({'error':'Must include "email" and "password".'})
+
+		attrs['user'] = user
+		return attrs
+
+
+
+class UserTokenSerializer(serializers.ModelSerializer):
 
 	class Meta:
 		model = Account
-		fields = ['email', 'password', ]
+		fields = ['email', 'username', ]

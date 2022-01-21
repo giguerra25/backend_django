@@ -23,10 +23,15 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    #Store
+    path('store/', include('store.urls')),
+
     
     # REST-framework
     path('api/accounts/', include('accounts.api.urls', 'accounts_api')),
     #path('auth/', include('dj_rest_auth.urls')),
+    #path("accounts/", include("django.contrib.auth.urls")),
 
     #Swagger
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

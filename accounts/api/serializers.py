@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from accounts.models import Account
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -51,3 +52,14 @@ class LoginSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Account
 		fields = ['email', 'password', ]
+
+class UserSerializer(serializers.ModelSerializer):
+
+	class Meta:
+		model = Account
+		fields = ['username','email', ]
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+	pass

@@ -4,21 +4,22 @@ from accounts.api.views import (
 				account_properties_view,
 				update_account_view,
 				registration_view,
-				ObtainAuthTokenView,
+				#ObtainAuthTokenView,
 				ChangePasswordView,
+				LoginView,
 				LogoutView,
 )
-
 
 app_name = 'accounts'
 
 urlpatterns = [
 
 	path('change_password/', ChangePasswordView.as_view(), name="change_password"),
-	path('login', ObtainAuthTokenView.as_view(), name="login"),
-	path('properties', account_properties_view, name="properties"),
-	path('properties/update', update_account_view, name="update"),
-	path('register', registration_view, name="register"),
+	#path('login/', ObtainAuthTokenView.as_view(), name="login"),
+	path('login/', LoginView.as_view(), name="login"),
+	path('properties/', account_properties_view, name="properties"),
+	path('properties/update/', update_account_view, name="update"),
+	path('register/', registration_view, name="register"),
 	path('logout/', LogoutView.as_view(), name="logout"),
 
 ]

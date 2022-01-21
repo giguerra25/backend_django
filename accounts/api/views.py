@@ -1,4 +1,4 @@
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.decorators import (
 								api_view, 
@@ -8,20 +8,28 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.views import APIView
 from rest_framework.generics import (
+									GenericAPIView,
 									UpdateAPIView,
 									ListAPIView,)
+from django.contrib.sessions.models import Session
+from datetime import datetime
 from django.contrib.auth import authenticate, logout
 from django.utils.decorators import method_decorator
 from accounts.api.serializers import (
                                     AccountPropertiesSerializer, 
                                         RegistrationSerializer,
                                         ChangePasswordSerializer,
-										LoginSerializer,)
+										LoginSerializer,
+										UserSerializer,
+										CustomTokenObtainPairSerializer,
+										)
 from accounts.models import Account
 from rest_framework.authtoken.models import Token
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from dj_rest_auth.views import LogoutView
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 description_messages={
@@ -50,7 +58,12 @@ expressions to ensure it's an email address.""",
 										"email": "user12@lab.com",
 										"username": "user12",
 										"pk": 16,
-										"token": "7418d9a1197600e2cc326b1ee39cf9a556eed2eb"}},),
+										"token": {
+											"refresh":"7418d9a1197600e2cc326b1ee39cf9a556eed2eb",
+											"access":"7418d9a1197600e2cc326b1ee39cf9a556eed2eb",}
+											}
+						},
+										),
 				'400': 'Bad or missing parameters or content-type not specified as application/json',})
 @api_view(['POST', ])
 @permission_classes([])
@@ -79,8 +92,14 @@ def registration_view(request):
 			data['email'] = account.email
 			data['username'] = account.username
 			data['pk'] = account.pk
-			token = Token.objects.get(user=account).key
-			data['token'] = token
+			#token = Token.objects.get(user=account).key
+
+			token = RefreshToken.for_user(Account.objects.get(email=account.email))
+			data['token'] = {
+								'refresh': str(token),
+								'access': str(token.access_token),
+							}
+			
 			return Response(data, status=status.HTTP_201_CREATED)
 		else:
 			data = serializer.errors
@@ -110,6 +129,7 @@ def validate_username(username):
 # Url: http://127.0.0.1:8000/api/accounts/
 # Headers: Authorization: Token <token>
 @swagger_auto_schema(
+	security=['JWT'],
 	method='get',
 	operation_description=description_messages['account_propierties'],
 	responses={'200': AccountPropertiesSerializer,
@@ -140,6 +160,7 @@ def account_properties_view(request):
 # Url: https://<your-domain>/api/account/properties/update
 # Headers: Authorization: Token <token>
 @swagger_auto_schema(
+	security=['JWT'],
 	method='put',
 	operation_description=description_messages['update_account'],
 	request_body=AccountPropertiesSerializer,
@@ -171,7 +192,7 @@ def update_account_view(request):
             return Response(data=data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+'''
 # LOGIN
 # URL: http://127.0.0.1:8000/api/accounts/login
 class ObtainAuthTokenView(APIView):
@@ -226,7 +247,7 @@ class ObtainAuthTokenView(APIView):
 			context['error_message'] = 'Invalid credentials'
 
 			return Response(context, status=status.HTTP_400_BAD_REQUEST)
-
+'''
 
 
 
@@ -236,6 +257,7 @@ class ObtainAuthTokenView(APIView):
 @method_decorator(name='patch', decorator=swagger_auto_schema(auto_schema=None))
 @method_decorator(name='put', 
 				decorator=swagger_auto_schema(
+							security=['JWT'],
 							operation_description=description_messages['change_password'],
 							request_body= ChangePasswordSerializer,
 							responses={'200': openapi.Response(
@@ -300,7 +322,7 @@ class ChangePasswordView(UpdateAPIView):
 
 
 
-
+'''
 @method_decorator(name='get', decorator=swagger_auto_schema(auto_schema=None))
 @method_decorator(name='post', 
 				decorator=swagger_auto_schema(
@@ -320,6 +342,124 @@ class LogoutView(LogoutView):
 	
 	authentication_classes = (TokenAuthentication,)
 	permission_classes = (IsAuthenticated,)
+'''
+
+# LOGIN
+# URL: http://127.0.0.1:8000/api/accounts/login
+class LoginView(TokenObtainPairView):
+
+	serializer_class = CustomTokenObtainPairSerializer
+
+	@swagger_auto_schema(
+		operation_description=description_messages['login'],
+		#request_body= LoginSerializer,
+		responses={'201': openapi.Response(
+							description='login was successful',
+							examples={"application/json": 
+										{
+											"token": "c89e8ab9abadfde6df61169fdc3ccc777a1dbf49",
+											"refresh-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9",
+											"user": {
+												"username": "user9",
+												"email": "user9@lab.org",
+											},
+											"message": "Session Successfuly initiated"
+										}
+									}
+										),
+					'400': openapi.Response(
+							description='bad or missing field "email" / "password"',
+							examples={"application/json": 
+										{
+											'error':'email or password not valid',
+										}
+									}
+										),
+		}
+	)
+	def post(self, request, *args, **kwargs):
+
+		email = request.data.get('email','')
+		password = request.data.get('password','')
+		user = authenticate(email=email, password=password)
+
+		if user:
+			login_serializer = self.serializer_class(data=request.data)
+
+			if login_serializer.is_valid():
+
+				if user.is_active:
+					user_serializer = UserSerializer(user)
+					return Response({
+						'token':login_serializer.validated_data.get('access'),
+						'refresh-token':login_serializer.validated_data.get('refresh'),
+						'user':user_serializer.data,
+						'message':'Session Successfuly initiated',
+					}, status=status.HTTP_200_OK)
+				else:
+					return Response({'error': 'This user cannot start session'}, 
+									status=status.HTTP_401_UNAUTHORIZED)
+			
+			return Response({'error': 'email or password not valid'}, status=status.HTTP_400_BAD_REQUEST)
+		return Response({'error': 'email or password not valid'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# LOGOUT
+# URL: http://127.0.0.1:8000/api/accounts/logout
+@method_decorator(name='post', 
+				decorator=swagger_auto_schema(
+							security=['JWT',],
+							operation_description=description_messages['logout'],
 
+							request_body= openapi.Schema(
+											type=openapi.TYPE_OBJECT,
+											title="Logout request",
+											required=["token"], 
+											properties={
+													'token': openapi.Schema(type=openapi.TYPE_STRING, 
+																			#description='string', 
+																			title="token",
+																			),
+														}
+														),
+							responses={'200': openapi.Response(
+												description='logout was successful',
+												examples={"application/json": 
+															{
+																'message':'Successfuly logged out',
+																'session_message': 'user sessions deleted',
+															}
+														}
+															),
+										'400': openapi.Response(
+												description='user does not exist',
+												examples={"application/json": 
+															{
+																'message': 'user does not exist'
+															}
+														}
+															),
+										}
+											)
+					)
+class LogoutView(GenericAPIView):
+
+	def post(self, request, *args, **kwargs):
+
+		user = Account.objects.filter(email=request.data.get('email',0))
+		
+		if user.exists():
+
+			user_id = Account.objects.get(email=request.data.get('email')).id
+			#destroy session
+			all_sessions = Session.objects.filter(expire_date__gte = datetime.now())
+			if all_sessions.exists():
+				for session in all_sessions:
+					session_data = session.get_decoded()
+					if user_id == int(session_data.get('_auth_user_id')):
+						session.delete()
+
+			RefreshToken.for_user(user.first())
+			return Response({'message':'Successfuly logged out',
+							'session_message': 'user sessions deleted'}, status=status.HTTP_200_OK)
+		return Response({'message':'user does not exist'}, status=status.HTTP_400_BAD_REQUEST)

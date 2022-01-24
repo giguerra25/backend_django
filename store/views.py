@@ -1,23 +1,33 @@
-from django.shortcuts import render, get_object_or_404
+from django.views import generic
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.decorators import user_passes_test
+from django.utils.decorators import method_decorator
 from django.http import HttpResponse
 from store.models import Product
 
 
+@method_decorator(login_required(login_url='/login/'), name='get')
+class HomeView(generic.TemplateView):
+    template_name = 'index.html'
 
-def listing(request):
-    data = {
+    def get(self, request):
+
+        data = {
         "products": Product.objects.all(),
-    }
-    return render(request, "store/listing.html", data)
+        }
+        return render(request, 'index.html', data)
 
+
+
+
+
+@login_required(login_url='/login/')
 def view_product(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     data = {
         "product": product,
     }
-
     return render(request, "store/view_product.html", data)
 
 

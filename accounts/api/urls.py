@@ -8,6 +8,7 @@ from accounts.api.views import (
 				ChangePasswordView,
 				LogoutView,
 				LoginView,
+				does_account_exist_view
 				#MyLogoutView,
 )
 
@@ -15,6 +16,8 @@ from accounts.api.views import (
 app_name = 'accounts'
 
 urlpatterns = [
+
+	path('check_if_account_exists/', does_account_exist_view, name="check_if_account_exists"),
 
 	path('change_password/', ChangePasswordView.as_view(), name="change_password"),
 	#path('login/', ObtainAuthTokenView.as_view(), name="login"),

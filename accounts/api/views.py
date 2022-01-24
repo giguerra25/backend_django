@@ -474,4 +474,18 @@ class ChangePasswordView(UpdateAPIView):
 		return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-		
+
+@api_view(['GET', ])
+@permission_classes([])
+@authentication_classes([])
+def does_account_exist_view(request):
+
+	if request.method == 'GET':
+		email = request.GET['email'].lower()
+		data = {}
+		try:
+			account = Account.objects.get(email=email)
+			data['response'] = email
+		except Account.DoesNotExist:
+			data['response'] = "Account does not exist"
+		return Response(data)	
